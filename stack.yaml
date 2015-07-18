@@ -1,0 +1,8 @@
+flags: {}
+packages:
+- '.'
+extra-deps:
+- twitter-conduit-0.1.0
+- twitter-types-0.7.0
+- twitter-types-lens-0.7.0
+resolver: lts-2.18
