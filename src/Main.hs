@@ -33,41 +33,6 @@ import qualified Web.Authenticate.OAuth as OA
 import           Web.Twitter.Conduit
 import           Web.Twitter.Types.Lens
 
-
--- data StatusDb = StatusDb {
---   statuses :: Map.Map StatusId ReducedStatus
---   } deriving (Show, Typeable)
-
-type TweetText = T.Text
-type Username  = T.Text
-
--- data ReducedStatus = ReducedStatus {
---     rdsText     :: TweetText
---   , rdsUserName :: Username
---     -- type LanguageCode = String
---   , rdsLang     :: Maybe LanguageCode
---     -- Integer
---   , rdsStatusId :: StatusId
---   } deriving (Show, Typeable)
-
--- resetStatuses :: Update StatusDb ()
--- resetStatuses = put $ StatusDb Map.empty
-
--- mergeStatuses :: Map.Map StatusId ReducedStatus -> Update StatusDb ()
--- mergeStatuses m = do
---   StatusDb statuses <- get
---   put $ StatusDb (Map.union statuses m)
-
--- viewStatuses :: Query StatusDb (Map.Map StatusId ReducedStatus)
--- viewStatuses = do
---   StatusDb statuses <- ask
---   return statuses
-
--- $(deriveSafeCopy 0 'base ''StatusDb)
--- $(deriveSafeCopy 0 'base ''ReducedStatus)
--- $(makeAcidic ''StatusDb ['mergeStatuses, 'viewStatuses, 'resetStatuses])
-
-
 authorize :: (MonadBaseControl IO m, MonadResource m) =>
                 OA.OAuth -- ^ OAuth Consumer key and secret
              -> (String -> m String) -- ^ PIN prompt
@@ -97,57 +62,9 @@ getTWInfo = do
         hFlush stdout
         getLine
 
-printStatus :: Status -> IO ()
-printStatus status = TIO.putStrLn texty
-  where texty = T.concat [ T.pack . show $ status ^. statusId
-                         , ": "
-                         , status ^. statusUser . userScreenName
-                         , ": "
-                         , status ^. statusText
-                         ]
+twInfo :: TWInfo
+twInfo = def {twToken = TWToken {twOAuth = def {oauthServerName = "twitter", oauthRequestUri = "https://api.twitter.com/oauth/request_token", oauthAccessTokenUri = "https://api.twitter.com/oauth/access_token", oauthAuthorizeUri = "https://api.twitter.com/oauth/authorize", oauthSignatureMethod = HMACSHA1, oauthConsumerKey = "qvPuz6IG5ra6GIvT2fy8t1qm6", oauthConsumerSecret = "v23vCkcm3xHZMqqkRwgos4HGiTZa6y0FLndMNZpDhLb8RbDgZF", oauthCallback = Nothing, oauthRealm = Nothing, oauthVersion = OAuth10a}, twCredential = Credential {unCredential = [("oauth_token",""),("oauth_token_secret",""),("user_id","161569820"),("screen_name","bitemyapp"),("x_auth_expires","0")]}}, twProxy = Nothing}
 
--- toReducedStatus :: Status -> ReducedStatus
--- toReducedStatus status = rds
---   where rds = ReducedStatus txt user lang sid
---         txt  = status ^. statusText
---         user = status ^. statusUser . userScreenName
---         lang = status ^. statusLang
---         sid  = status ^. statusId
-
--- Prelude> let exampleStatus = ReducedStatus "Hello, World!" "argumatronic" "EN" 1
--- Prelude> sdb <- openLocalStateFrom "db/" (StatusDb Map.empty)
--- Prelude> Data.Acid.update sdb (AddStatus exampleStatus)
--- ()
--- Prelude> statuses <- query sdb ViewStatuses
--- Prelude> statuses
--- fromList [ReducedStatus {rdsText = "Hello, World!", rdsUserName = "argumatronic", rdsLang = "EN"}]
--- Prelude> Data.Acid.update sdb (AddStatus exampleStatus)
--- ()
--- Prelude> statuses <- query sdb ViewStatuses
--- Prelude> statuses
--- fromList [ReducedStatus {rdsText = "Hello, World!", rdsUserName = "argumatronic", rdsLang = "EN", rdsStatusId = 1},ReducedStatus {rdsText = "Hello, World!", rdsUserName = "argumatronic", rdsLang = "EN", rdsStatusId = 1}]
-
--- foldStream :: TWInfo
---            -> Int
---            -> UserParam
---            -> IO (Map.Map StatusId ReducedStatus)
--- foldStream twInfo numTweets user = do
---   withManager $ \mgr -> do
---       sourceWithMaxId twInfo mgr $
---         userTimeline user
---       C.$= CL.isolate numTweets
---       C.$$ CL.foldM reduceStatus Map.empty
---   where reduceStatus m status = return $ Map.insert k rds m
---           where rds = toReducedStatus status
---                 k   = rdsStatusId rds
-
--- twInfo :: TWInfo
--- twInfo = def
---     { twToken = def { twOAuth = tokens, twCredential = credential }
---     , twProxy = Nothing
---     }
-
--- dumpStream :: TWInfo -> Manager -> Int -> UserParam -> IO (Map.Map StatusId Status)
 dumpStream :: MonadResource m => TWInfo -> Manager
               -> Int -> UserParam -> m (Map.Map StatusId Status)
 dumpStream twInfo mgr numTweets user = do
@@ -159,20 +76,52 @@ dumpStream twInfo mgr numTweets user = do
           return $ Map.insert k status m
          where k = status ^. statusId
 
-getFollowers twInfo numTweets user = undefined
+-- getFriends :: MonadResource m =>
+--               TWInfo -> Int -> UserParam -> m [UserId]
+-- getFriends twInfo mgr numTweets user = do
+--   friendsIds user $
 
-twInfo :: TWInfo
-twInfo = def {twToken = TWToken {twOAuth = def {oauthServerName = "twitter", oauthRequestUri = "https://api.twitter.com/oauth/request_token", oauthAccessTokenUri = "https://api.twitter.com/oauth/access_token", oauthAuthorizeUri = "https://api.twitter.com/oauth/authorize", oauthSignatureMethod = HMACSHA1, oauthConsumerKey = "qvPuz6IG5ra6GIvT2fy8t1qm6", oauthConsumerSecret = "v23vCkcm3xHZMqqkRwgos4HGiTZa6y0FLndMNZpDhLb8RbDgZF", oauthCallback = Nothing, oauthRealm = Nothing, oauthVersion = OAuth10a}, twCredential = Credential {unCredential = [("oauth_token",""),("oauth_token_secret",""),("user_id","161569820"),("screen_name","bitemyapp"),("x_auth_expires","0")]}}, twProxy = Nothing}
+-- following?, name, screen name
+type SummaryUser = (UserId, T.Text, T.Text)
 
--- main :: IO ()
-main = undefined
-  -- withManager $ \mgr -> do
-  --   m <- dumpStream twInfo mgr 100 (ScreenNameParam "bitemyapp")
-  --   print m
+summarize :: User -> SummaryUser
+summarize u = (u ^. userId, u ^. userName, u ^. userScreenName)
 
-    -- twInfo <- getTWInfo
-    -- print twInfo
-    -- myDb <- openLocalStateFrom "db/" (StatusDb Map.empty)
-    -- Data.Acid.update myDb (MergeStatuses m)
-    -- Data.Acid.createCheckpoint myDb
-    -- Data.Acid.closeAcidState myDb
+findConversations :: T.Text -> T.Text
+                  -> APIRequest SearchTweets (SearchResult [SearchStatus])
+findConversations me friend = searchTweets query
+  where query = T.concat ["from:", friend, " @", me]
+
+scoreRelationship :: SearchResult [SearchStatus] -> Integer
+scoreRelationship = undefined
+
+-- from:sjfloat @bitemyapp
+
+main :: IO ()
+main = do
+  mgr <- newManager tlsManagerSettings
+  runResourceT $ do
+    -- let swc = sourceWithCursor twInfo mgr
+        -- c = call twInfo mgr
+    -- friends <- c (friendsIds (ScreenNameParam "bitemyapp") & count ?~ 5)
+    -- let cond = swc $ friendsIds (ScreenNameParam "bitemyapp")
+    -- cond C.$= CL.isolate 5
+    --      C.=$= CL.map (usersShow . UserIdParam)
+    --      -- `C.fuseBoth` CL.mapM (sourceWithCursor twInfo mgr)
+    --      C.$$ CL.mapM_ (liftIO . print)
+    -- let friendProfiles = fmap usersShow
+    -- friends' <-  fmap (\f -> call twInfo mgr (usersShow (UserIdParam f))) friends
+    -- let source = swc $ friendsIds (ScreenNameParam "bitemyapp")
+    --     profiles = source C.$= CL.isolate 5 C.$= CL.mapM (usersShow . UserIdParam)
+    friendsCursor <- call twInfo mgr (friendsList (ScreenNameParam "bitemyapp") & count ?~ 5)
+    let friends = fmap summarize (contents friendsCursor)
+    --     profilesFetch = fmap (usersShow . UserIdParam) friendIds
+    -- profiles <- mapM (call twInfo mgr) profilesFetch
+    liftIO $ print friends
+    return ()
+    -- C.$$ liftIO . print
+    -- let friendProfiles = C.$$ CL.mapM (usersShow . UserIdParam)
+    -- liftIO $ print friendProfiles
+  -- where getProfile twInfo mgr f = call twInfo mgr (usersShow (UserIdParam f))
+    -- m <- dumpStream twInfo mgr 25 (ScreenNameParam "bitemyapp")
+    -- liftIO $ print m
